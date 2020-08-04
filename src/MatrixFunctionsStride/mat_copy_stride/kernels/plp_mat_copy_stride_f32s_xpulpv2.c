@@ -57,16 +57,7 @@ void plp_mat_copy_stride_f32s_xpulpv2(const float *__restrict__ pSrc,
                                       uint32_t strideDst,
                                       float *__restrict__ pDst) {
 
-//#define BASIC_VERSION // if used don't forget to also use the undefine at end of file
-#ifdef BASIC_VERSION
-
-    for (int m = 0; m < M; m++) {
-        for (int n = 0; n < N; n++) {
-            pDst[m * strideDst + n] = pSrc[m * strideSrc + n];
-        }
-    }
-
-#else
+#ifdef PLP_MATH_LOOPUNROLL
 
     const int32_t *__restrict__ pSrcI = (int32_t *)pSrc;
     int32_t *__restrict__ pDstI = (int32_t *)pDst;
@@ -89,8 +80,18 @@ void plp_mat_copy_stride_f32s_xpulpv2(const float *__restrict__ pSrc,
         pDstI += strideDst - N;
     }
 
+#else // PLP_MATH_LOOPUNROLL
+
+    const int32_t *__restrict__ pSrcI = (int32_t *)pSrc;
+    int32_t *__restrict__ pDstI = (int32_t *)pDst;
+
+    for (int m = 0; m < M; m++) {
+        for (int n = 0; n < N; n++) {
+            pDstI[m * strideDst + n] = pSrcI[m * strideSrc + n];
+        }
+    }
+
 #endif
-    //#undef BASIC_VERSION
 }
 
 /**

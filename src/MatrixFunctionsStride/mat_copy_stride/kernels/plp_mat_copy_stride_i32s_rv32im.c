@@ -57,16 +57,7 @@ void plp_mat_copy_stride_i32s_rv32im(const int32_t *__restrict__ pSrc,
                                      uint32_t strideDst,
                                      int32_t *__restrict__ pDst) {
 
-//#define BASIC_VERSION // if used don' forget to also use undefine at end of file
-#ifdef BASIC_VERSION
-
-    for (int m = 0; m < M; m++) {
-        for (int n = 0; n < N; n++) {
-            pDst[m * strideDst + n] = pSrc[m * strideSrc + n];
-        }
-    }
-
-#else
+#ifdef PLP_MATH_LOOPUNROLL
 
     unsigned int m;
     unsigned int n;
@@ -86,8 +77,15 @@ void plp_mat_copy_stride_i32s_rv32im(const int32_t *__restrict__ pSrc,
         pDst += strideDst - N;
     }
 
+#else // PLP_MATH_LOOPUNROLL
+
+    for (int m = 0; m < M; m++) {
+        for (int n = 0; n < N; n++) {
+            pDst[m * strideDst + n] = pSrc[m * strideSrc + n];
+        }
+    }
+
 #endif
-    //#undef BASIC_VERSION
 }
 
 /**

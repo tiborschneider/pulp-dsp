@@ -57,38 +57,116 @@ void plp_mat_copy_stride_i8s_xpulpv2(const int8_t *__restrict__ pSrc,
                                      uint32_t strideDst,
                                      int8_t *__restrict__ pDst) {
 
-//#define BASIC_VERSION // if used don't forget to also use the undefine at end of file
-#ifdef BASIC_VERSION
+#ifdef PLP_MATH_LOOPUNROLL
 
-    for (int m = 0; m < M; m++) {
-        for (int n = 0; n < N; n++) {
-            pDst[m * strideDst + n] = pSrc[m * strideSrc + n];
+    unsigned int m;
+    unsigned int n;
+
+    const int8_t *__restrict__ pSrc1 = pSrc;
+    const int8_t *__restrict__ pSrc2 = pSrc + strideSrc;
+    int8_t *__restrict__ pDst1 = pDst;
+    int8_t *__restrict__ pDst2 = pDst + strideDst;
+
+    unsigned int offset_src = 2 * strideSrc - N;
+    unsigned int offset_dst = 2 * strideDst - N;
+
+    unsigned int m_iter = M >> 1;
+    unsigned int m_rem = M & 0x1;
+
+    unsigned int n_iter = N >> 2;
+    unsigned int n_rem = N & 0x3;
+
+    if (n_rem) {
+        for (m = 0; m < m_iter; m++) {
+            for (n = 0; n < n_iter; n++) {
+                *((int32_t *)pDst1) = *((int32_t *)pSrc1);
+                *((int32_t *)pDst2) = *((int32_t *)pSrc2);
+                pSrc1 += 4;
+                pSrc2 += 4;
+                pDst1 += 4;
+                pDst2 += 4;
+            }
+            for (n = 0; n < n_rem; n++) {
+                *pDst1++ = *pSrc1++;
+                *pDst2++ = *pSrc2++;
+            }
+            pSrc1 += offset_src;
+            pSrc2 += offset_src;
+            pDst1 += offset_dst;
+            pDst2 += offset_dst;
+        }
+        if (m_rem) {
+            for (n = 0; n < n_iter; n++) {
+                *((int32_t *)pDst1) = *((int32_t *)pSrc1);
+                pSrc1 += 4;
+                pDst1 += 4;
+            }
+            for (n = 0; n < n_rem; n++) {
+                *pDst1++ = *pSrc1++;
+            }
+        }
+    } else {
+        for (m = 0; m < m_iter; m++) {
+            for (n = 0; n < n_iter; n++) {
+                *((int32_t *)pDst1) = *((int32_t *)pSrc1);
+                *((int32_t *)pDst2) = *((int32_t *)pSrc2);
+                pSrc1 += 4;
+                pSrc2 += 4;
+                pDst1 += 4;
+                pDst2 += 4;
+            }
+            pSrc1 += offset_src;
+            pSrc2 += offset_src;
+            pDst1 += offset_dst;
+            pDst2 += offset_dst;
+        }
+        if (m_rem) {
+            for (n = 0; n < n_iter; n++) {
+                *((int32_t *)pDst1) = *((int32_t *)pSrc1);
+                pSrc1 += 4;
+                pDst1 += 4;
+            }
         }
     }
 
 #else
 
+    // No Loop Unroll
     unsigned int m;
     unsigned int n;
 
-    unsigned int n_iter = N >> 2;
-    unsigned int n_rem = N & 0x00000003;
+    unsigned int offset_src = strideSrc - N;
+    unsigned int offset_dst = strideDst - N;
 
-    for (m = 0; m < M; m++) {
-        for (n = 0; n < n_iter; n++) {
-            *((int32_t *)pDst) = *((int32_t *)pSrc);
-            pDst += 4;
-            pSrc += 4;
+    unsigned int n_iter = N >> 2;
+    unsigned int n_rem = N & 0x3;
+
+    if (n_rem) {
+        for (m = 0; m < M; m++) {
+            for (n = 0; n < n_iter; n++) {
+                *((int32_t *)pDst) = *((int32_t *)pSrc);
+                pSrc += 4;
+                pDst += 4;
+            }
+            for (n = 0; n < n_rem; n++) {
+                *pDst++ = *pSrc++;
+            }
+            pSrc += offset_src;
+            pDst += offset_dst;
         }
-        for (n = 0; n < n_rem; n++) {
-            *pDst++ = *pSrc++;
+    } else {
+        for (m = 0; m < M; m++) {
+            for (n = 0; n < n_iter; n++) {
+                *((int32_t *)pDst) = *((int32_t *)pSrc);
+                pSrc += 4;
+                pDst += 4;
+            }
+            pSrc += offset_src;
+            pDst += offset_dst;
         }
-        pSrc += strideSrc - N;
-        pDst += strideDst - N;
     }
 
 #endif
-    //#undef BASIC_VERSION
 }
 /**
    @} end of MatCopyStrideKernels group

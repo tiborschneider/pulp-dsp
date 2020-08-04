@@ -64,22 +64,12 @@ void plp_mat_copy_stride_i8p_xpulpv2(void *args) {
     uint32_t nPE = a->nPE;
     int8_t *__restrict__ pDst = a->pDst;
 
-//#define BASIC_VERSION // if used don't forget to also use the undefine at end of file
-#ifdef BASIC_VERSION
-
-    for (int m = core_id; m < M; m += nPE) {
-        for (int n = 0; n < N; n++) {
-            pDst[m * strideDst + n] = pSrc[m * strideSrc + n];
-        }
-    }
-
-#else
-
     unsigned int m;
     unsigned int n;
 
-    unsigned int n_iter = N >> 2;
-    unsigned int n_rem = N & 0x00000003;
+    unsigned int n_iter = N >> 3;
+    unsigned int n_rem = N & 0b011;
+    unsigned int n_last_full = N & 0b100;
 
     pSrc = pSrc + strideSrc * core_id;
     pDst = pDst + strideDst * core_id;
@@ -87,21 +77,155 @@ void plp_mat_copy_stride_i8p_xpulpv2(void *args) {
     unsigned int src_offset = (strideSrc * nPE) - N;
     unsigned int dst_offset = (strideDst * nPE) - N;
 
-    for (m = core_id; m < M; m += nPE) {
-        for (n = 0; n < n_iter; n++) {
-            *((int32_t *)pDst) = *((int32_t *)pSrc);
-            pDst += 4;
-            pSrc += 4;
-        }
-        for (n = 0; n < n_rem; n++) {
-            *pDst++ = *pSrc++;
-        }
-        pSrc += src_offset;
-        pDst += dst_offset;
-    }
+    /*
+     * There exists many cases:
+     * - n_iter = 0
+     *   - n_rem = 0 (implies n_last_full = 1)
+     *   - n_rem > 0
+     *     - n_last_full = 1
+     *     - n_last_full = 0
+     * - n_iter > 0
+     *   - n_rem = 0
+     *     - n_last_full = 0
+     *     - n_last_full = 1
+     *   - n_rem > 0
+     *     - n_last_full = 0
+     *     - n_last_full = 1
+     *
+     */
 
-#endif
-    //#undef BASIC_VERSION
+    if (n_iter == 0) {
+        if (n_rem == 0) {
+            if (n_last_full == 0) {
+                // n_iter == 0
+                // n_last_full == 0
+                // n_rem == 0
+                // TODO this case should not happen! Here, we don't do anyhing
+            } else { // n_last_full == 1
+                // n_iter == 0
+                // n_last_full == 1
+                // n_rem == 0
+                for (m = core_id; m < M; m += nPE) {
+                    *((int32_t *)pDst) = *((int32_t *)pSrc);
+                    pDst += 4;
+                    pSrc += 4;
+
+                    pSrc += src_offset;
+                    pDst += dst_offset;
+                }
+            }
+        } else { // n_rem > 1
+            if (n_last_full == 0) {
+                // n_iter == 0
+                // n_last_full == 0
+                // n_rem >= 1
+                for (m = core_id; m < M; m += nPE) {
+                    for (n = 0; n < n_rem; n++) {
+                        *pDst++ = *pSrc++;
+                    }
+                    pSrc += src_offset;
+                    pDst += dst_offset;
+                }
+            } else { // n_last_full == 1
+                // n_iter == 0
+                // n_last_full == 1
+                // n_rem >= 1
+                for (m = core_id; m < M; m += nPE) {
+                    *((int32_t *)pDst) = *((int32_t *)pSrc);
+                    pDst += 4;
+                    pSrc += 4;
+                    for (n = 0; n < n_rem; n++) {
+                        *pDst++ = *pSrc++;
+                    }
+                    pSrc += src_offset;
+                    pDst += dst_offset;
+                }
+            }
+        }
+    } else { // n_iter > 0
+        if (n_rem == 0) {
+            if (n_last_full == 0) {
+                // n_iter >= 1
+                // n_last_full == 0
+                // n_rem == 0
+                for (m = core_id; m < M; m += nPE) {
+                    for (n = 0; n < n_iter; n++) {
+                        *((int32_t *)pDst) = *((int32_t *)pSrc);
+                        pDst += 4;
+                        pSrc += 4;
+                        *((int32_t *)pDst) = *((int32_t *)pSrc);
+                        pDst += 4;
+                        pSrc += 4;
+                    }
+                    pSrc += src_offset;
+                    pDst += dst_offset;
+                }
+            } else { // n_last_full == 1
+                // n_iter >= 1
+                // n_last_full == 1
+                // n_rem == 0
+                for (m = core_id; m < M; m += nPE) {
+                    for (n = 0; n < n_iter; n++) {
+                        *((int32_t *)pDst) = *((int32_t *)pSrc);
+                        pDst += 4;
+                        pSrc += 4;
+                        *((int32_t *)pDst) = *((int32_t *)pSrc);
+                        pDst += 4;
+                        pSrc += 4;
+                    }
+                    *((int32_t *)pDst) = *((int32_t *)pSrc);
+                    pDst += 4;
+                    pSrc += 4;
+
+                    pSrc += src_offset;
+                    pDst += dst_offset;
+                }
+            }
+        } else { // n_rem > 1
+            if (n_last_full == 0) {
+                // n_iter >= 1
+                // n_last_full == 0
+                // n_rem >= 1
+                for (m = core_id; m < M; m += nPE) {
+                    for (n = 0; n < n_iter; n++) {
+                        *((int32_t *)pDst) = *((int32_t *)pSrc);
+                        pDst += 4;
+                        pSrc += 4;
+                        *((int32_t *)pDst) = *((int32_t *)pSrc);
+                        pDst += 4;
+                        pSrc += 4;
+                    }
+                    for (n = 0; n < n_rem; n++) {
+                        *pDst++ = *pSrc++;
+                    }
+                    pSrc += src_offset;
+                    pDst += dst_offset;
+                }
+            } else { // n_last_full == 1
+                // n_iter >= 1
+                // n_last_full == 1
+                // n_rem >= 1
+                for (m = core_id; m < M; m += nPE) {
+                    for (n = 0; n < n_iter; n++) {
+                        *((int32_t *)pDst) = *((int32_t *)pSrc);
+                        pDst += 4;
+                        pSrc += 4;
+                        *((int32_t *)pDst) = *((int32_t *)pSrc);
+                        pDst += 4;
+                        pSrc += 4;
+                    }
+                    *((int32_t *)pDst) = *((int32_t *)pSrc);
+                    pDst += 4;
+                    pSrc += 4;
+                    for (n = 0; n < n_rem; n++) {
+                        *pDst++ = *pSrc++;
+                    }
+                    pSrc += src_offset;
+                    pDst += dst_offset;
+                }
+            }
+        }
+    }
 }
 
 /**

@@ -64,17 +64,6 @@ void plp_mat_copy_stride_i16p_xpulpv2(void *args) {
     uint32_t nPE = a->nPE;
     int16_t *__restrict__ pDst = a->pDst;
 
-//#define BASIC_VERSION // if used don't forget to also use the undefine at end of file
-#ifdef BASIC_VERSION
-
-    for (int m = core_id; m < M; m += nPE) {
-        for (int n = 0; n < N; n++) {
-            pDst[m * strideDst + n] = pSrc[m * strideSrc + n];
-        }
-    }
-
-#else
-
     unsigned int m;
     unsigned int n;
 
@@ -84,24 +73,101 @@ void plp_mat_copy_stride_i16p_xpulpv2(void *args) {
     unsigned int src_offset = (strideSrc * nPE) - N;
     unsigned int dst_offset = (strideDst * nPE) - N;
 
-    unsigned int n_iter = N >> 1;
-    unsigned int n_rem = N & 0x00000001;
+    unsigned int n_iter = N >> 2;
+    unsigned int n_blk = N & 0b10; // Split the remaining into blk and rem
+    unsigned int n_rem = N & 0b01;
 
-    for (m = core_id; m < M; m += nPE) {
-        for (n = 0; n < n_iter; n++) {
-            *((int32_t *)pDst) = *((int32_t *)pSrc);
-            pDst += 2;
-            pSrc += 2;
+    if (n_rem) {
+        unsigned int src_offset = nPE * strideSrc - N + 1;
+        unsigned int dst_offset = nPE * strideDst - N + 1;
+
+        if (n_blk) {
+            // n_rem == 1
+            // n_blk == 1
+            for (m = core_id; m < M; m += nPE) {
+                // n_iter
+                for (n = 0; n < n_iter; n++) {
+                    *((int32_t *)pDst) = *((int32_t *)pSrc);
+                    pDst += 2;
+                    pSrc += 2;
+                    *((int32_t *)pDst) = *((int32_t *)pSrc);
+                    pDst += 2;
+                    pSrc += 2;
+                }
+                // n_blk
+                *((int32_t *)pDst) = *((int32_t *)pSrc);
+                pDst += 2;
+                pSrc += 2;
+                // n_rem
+                *pDst = *pSrc;
+                // go to next line
+                pSrc += src_offset;
+                pDst += dst_offset;
+            }
+        } else {
+            // n_rem == 1
+            // n_blk == 0
+            for (m = core_id; m < M; m += nPE) {
+                // n_iter
+                for (n = 0; n < n_iter; n++) {
+                    *((int32_t *)pDst) = *((int32_t *)pSrc);
+                    pDst += 2;
+                    pSrc += 2;
+                    *((int32_t *)pDst) = *((int32_t *)pSrc);
+                    pDst += 2;
+                    pSrc += 2;
+                }
+                // n_rem
+                *pDst = *pSrc;
+                // go to next line
+                pSrc += src_offset;
+                pDst += dst_offset;
+            }
         }
-        if (n_rem) {
-            *pDst++ = *pSrc++;
+    } else {
+        unsigned int src_offset = nPE * strideSrc - N;
+        unsigned int dst_offset = nPE * strideDst - N;
+
+        if (n_blk) {
+            // n_rem == 0
+            // n_blk == 1
+            for (m = core_id; m < M; m += nPE) {
+                // n_iter
+                for (n = 0; n < n_iter; n++) {
+                    *((int32_t *)pDst) = *((int32_t *)pSrc);
+                    pDst += 2;
+                    pSrc += 2;
+                    *((int32_t *)pDst) = *((int32_t *)pSrc);
+                    pDst += 2;
+                    pSrc += 2;
+                }
+                // n_blk
+                *((int32_t *)pDst) = *((int32_t *)pSrc);
+                pDst += 2;
+                pSrc += 2;
+                // go to next line
+                pSrc += src_offset;
+                pDst += dst_offset;
+            }
+        } else {
+            // n_rem == 0
+            // n_blk == 0
+            for (m = core_id; m < M; m += nPE) {
+                // n_iter
+                for (n = 0; n < n_iter; n++) {
+                    *((int32_t *)pDst) = *((int32_t *)pSrc);
+                    pDst += 2;
+                    pSrc += 2;
+                    *((int32_t *)pDst) = *((int32_t *)pSrc);
+                    pDst += 2;
+                    pSrc += 2;
+                }
+                // go to next line
+                pSrc += src_offset;
+                pDst += dst_offset;
+            }
         }
-        pSrc += src_offset;
-        pDst += dst_offset;
     }
-
-#endif
-    //#undef BASIC_VERSION
 }
 
 /**

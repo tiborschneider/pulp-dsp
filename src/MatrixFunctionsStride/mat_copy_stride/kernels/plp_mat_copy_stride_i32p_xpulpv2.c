@@ -60,17 +60,6 @@ void plp_mat_copy_stride_i32p_xpulpv2(void *args) {
     uint32_t nPE = a->nPE;
     int32_t *__restrict__ pDst = a->pDst;
 
-//#define BASIC_VERSION // if used don't forget to also use the undefine at end of file
-#ifdef BASIC_VERSION
-
-    for (int m = core_id; m < M; m += nPE) {
-        for (int n = 0; n < N; n++) {
-            pDst[m * strideDst + n] = pSrc[m * strideSrc + n];
-        }
-    }
-
-#else
-
     unsigned int m;
     unsigned int n;
 
@@ -94,9 +83,6 @@ void plp_mat_copy_stride_i32p_xpulpv2(void *args) {
         pSrc += src_offset;
         pDst += dst_offset;
     }
-
-#endif
-    //#undef BASIC_VERSION
 }
 
 /**
