@@ -61,50 +61,165 @@ void plp_mat_add_stride_i16s_xpulpv2(const int16_t *__restrict__ pSrcA,
                                      uint32_t strideY,
                                      int16_t *__restrict__ pDst) {
 
-//#define BASIC_VERSION // if used don't forget to also use the undefine at end of file
-#ifdef BASIC_VERSION
-
-    uint32_t m, n; // loop counters
-
-    for (m = 0; m < M; m++) {
-        for (n = 0; n < N; n++) {
-            pDst[m * strideY + n] = pSrcA[m * strideA + n] + pSrcB[m * strideB + n];
-        }
-    }
-
-#else
+#ifdef PLP_MATH_LOOPUNROLL
 
     uint32_t m, n; // loop counters
 
     unsigned int n_iter = N >> 2;
-    unsigned int n_rem = N & 0x3;
+    unsigned int n_rem = N & 0b01;
+    unsigned int n_blk = N & 0b10;
 
     unsigned int step_a = strideA - N;
     unsigned int step_b = strideB - N;
     unsigned int step_y = strideY - N;
 
-    for (m = 0; m < M; m++) {
-        for (n = 0; n < n_iter; n++) {
-            v2s a1 = *((v2s *)pSrcA);
-            v2s b1 = *((v2s *)pSrcB);
-            v2s a2 = *((v2s *)(pSrcA + 2));
-            v2s b2 = *((v2s *)(pSrcB + 2));
-            *((v2s *)pDst) = __ADD2(a1, b1);
-            *((v2s *)(pDst + 2)) = __ADD2(a2, b2);
-            pSrcA += 4;
-            pSrcB += 4;
-            pDst += 4;
+    if (n_rem) {
+        if (n_blk) {
+            // n_rem == 1
+            // n_blk == 1
+            for (m = 0; m < M; m++) {
+                for (n = 0; n < n_iter; n++) {
+                    v2s a1 = *((v2s *)pSrcA);
+                    v2s b1 = *((v2s *)pSrcB);
+                    v2s a2 = *((v2s *)(pSrcA + 2));
+                    v2s b2 = *((v2s *)(pSrcB + 2));
+                    *((v2s *)pDst) = __ADD2(a1, b1);
+                    *((v2s *)(pDst + 2)) = __ADD2(a2, b2);
+                    pSrcA += 4;
+                    pSrcB += 4;
+                    pDst += 4;
+                }
+                // handle blk
+                v2s a = *((v2s *)pSrcA);
+                v2s b = *((v2s *)pSrcB);
+                *((v2s *)pDst) = __ADD2(a, b);
+                pSrcA += 2;
+                pSrcB += 2;
+                pDst += 2;
+                // handle rem
+                *pDst++ = *pSrcA++ + *pSrcB++;
+                // go to next line
+                pSrcA += step_a;
+                pSrcB += step_b;
+                pDst += step_y;
+            }
+        } else {
+            // n_rem == 1
+            // n_blk == 0
+            for (m = 0; m < M; m++) {
+                for (n = 0; n < n_iter; n++) {
+                    v2s a1 = *((v2s *)pSrcA);
+                    v2s b1 = *((v2s *)pSrcB);
+                    v2s a2 = *((v2s *)(pSrcA + 2));
+                    v2s b2 = *((v2s *)(pSrcB + 2));
+                    *((v2s *)pDst) = __ADD2(a1, b1);
+                    *((v2s *)(pDst + 2)) = __ADD2(a2, b2);
+                    pSrcA += 4;
+                    pSrcB += 4;
+                    pDst += 4;
+                }
+                // handle rem
+                *pDst++ = *pSrcA++ + *pSrcB++;
+                // go to next line
+                pSrcA += step_a;
+                pSrcB += step_b;
+                pDst += step_y;
+            }
         }
-        for (n = 0; n < n_rem; n++) {
+    } else {
+        if (n_blk) {
+            // n_rem == 0
+            // n_blk == 1
+            for (m = 0; m < M; m++) {
+                for (n = 0; n < n_iter; n++) {
+                    v2s a1 = *((v2s *)pSrcA);
+                    v2s b1 = *((v2s *)pSrcB);
+                    v2s a2 = *((v2s *)(pSrcA + 2));
+                    v2s b2 = *((v2s *)(pSrcB + 2));
+                    *((v2s *)pDst) = __ADD2(a1, b1);
+                    *((v2s *)(pDst + 2)) = __ADD2(a2, b2);
+                    pSrcA += 4;
+                    pSrcB += 4;
+                    pDst += 4;
+                }
+                // handle blk
+                v2s a = *((v2s *)pSrcA);
+                v2s b = *((v2s *)pSrcB);
+                *((v2s *)pDst) = __ADD2(a, b);
+                pSrcA += 2;
+                pSrcB += 2;
+                pDst += 2;
+                // go to next line
+                pSrcA += step_a;
+                pSrcB += step_b;
+                pDst += step_y;
+            }
+        } else {
+            // n_rem == 0
+            // n_blk == 0
+            for (m = 0; m < M; m++) {
+                for (n = 0; n < n_iter; n++) {
+                    v2s a1 = *((v2s *)pSrcA);
+                    v2s b1 = *((v2s *)pSrcB);
+                    v2s a2 = *((v2s *)(pSrcA + 2));
+                    v2s b2 = *((v2s *)(pSrcB + 2));
+                    *((v2s *)pDst) = __ADD2(a1, b1);
+                    *((v2s *)(pDst + 2)) = __ADD2(a2, b2);
+                    pSrcA += 4;
+                    pSrcB += 4;
+                    pDst += 4;
+                }
+                // go to next line
+                pSrcA += step_a;
+                pSrcB += step_b;
+                pDst += step_y;
+            }
+        }
+    }
+
+#else // PLP_MATH_LOOPUNROLL
+
+    uint32_t m, n; // loop counters
+
+    unsigned int n_iter = N >> 1;
+    unsigned int n_rem = N & 0x1;
+
+    unsigned int step_a = strideA - N;
+    unsigned int step_b = strideB - N;
+    unsigned int step_y = strideY - N;
+
+    if (n_rem) {
+        for (m = 0; m < M; m++) {
+            for (n = 0; n < n_iter; n++) {
+                v2s a = *((v2s *)pSrcA);
+                v2s b = *((v2s *)pSrcB);
+                *((v2s *)pDst) = __ADD2(a, b);
+                pSrcA += 2;
+                pSrcB += 2;
+                pDst += 2;
+            }
             *pDst++ = *pSrcA++ + *pSrcB++;
+            pSrcA += step_a;
+            pSrcB += step_b;
+            pDst += step_y;
         }
-        pSrcA += step_a;
-        pSrcB += step_b;
-        pDst += step_y;
+    } else {
+        for (m = 0; m < M; m++) {
+            for (n = 0; n < n_iter; n++) {
+                v2s a = *((v2s *)pSrcA);
+                v2s b = *((v2s *)pSrcB);
+                *((v2s *)pDst) = __ADD2(a, b);
+                pSrcA += 2;
+                pSrcB += 2;
+                pDst += 2;
+            }
+            pSrcA += step_a;
+            pSrcB += step_b;
+            pDst += step_y;
+        }
     }
 
 #endif
-    //#undef BASIC_VERSION
 }
 /**
    @} end of MatAddStrideKernels group

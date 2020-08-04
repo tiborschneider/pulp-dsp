@@ -16,7 +16,7 @@ import re
 
 GENERATE_STIMULI = "gen_stimuli"
 # L2_MEM_SIZE_KB = 448
-TEST_MEM_SIZE_KB = 256
+TEST_MEM_SIZE_KB = 224
 
 
 class Variable(object):

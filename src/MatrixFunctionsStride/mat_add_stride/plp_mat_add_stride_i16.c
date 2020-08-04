@@ -44,6 +44,14 @@
 
       `pDst[m, n] = pSrcA[m, n] + pSrcB[m, n]`
 
+  For strided operations, the implementation is an optimized version of the following code:
+
+      for (int m = 0; m < M; m++) {
+          for (int n = 0; n < N; n++) {
+              pDst[m * strideY + n] = pSrcA[m * strideA + n] + pSrcB[m * strideB + n];
+          }
+      }
+
   There are functions for integer 32- 16- and 8-bit data types, as well as for floating-point. These
   functions can also be used for fix-point matrices, if they have their fix-point at the same
   location. The outpt matrix will then also have the fix-point at the same location.

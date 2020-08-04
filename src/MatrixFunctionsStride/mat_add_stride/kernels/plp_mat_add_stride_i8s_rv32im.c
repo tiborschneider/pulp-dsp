@@ -61,18 +61,18 @@ void plp_mat_add_stride_i8s_rv32im(const int8_t *__restrict__ pSrcA,
                                    uint32_t strideY,
                                    int8_t *__restrict__ pDst) {
 
-//#define BASIC_VERSION // if used don' forget to also use undefine at end of file
-#ifdef BASIC_VERSION
+#ifdef PLP_MATH_LOOPUNROLL
 
-    uint32_t m, n; // loop counters
-
-    for (m = 0; m < M; m++) {
-        for (n = 0; n < N; n++) {
-            pDst[m * strideY + n] = pSrcA[m * strideA + n] + pSrcB[m * strideB + n];
-        }
-    }
-
-#else
+    /*
+     * Even though this implementation obviously unrolls the loops, load stalls still seem to occur.
+     * In fact, for a 32x32 matrix addition, we have 2055 load stalls, even though there are just a
+     * total of 2048 loads. This obviously does not make sense... When doing load stalls, we could
+     * remove a total of 4 load stalls, but this is very insignificant. This does not change with
+     * the introduction of the memory fence `asm volatile ("" ::: "memory")`. Also, checking the
+     * disassembly, the compiler seems to do everything correctly.
+     *
+     * TODO fix this behvior
+     */
 
     uint32_t m, n; // loop counters
 
@@ -83,16 +83,49 @@ void plp_mat_add_stride_i8s_rv32im(const int8_t *__restrict__ pSrcA,
     unsigned int step_b = strideB - N;
     unsigned int step_y = strideY - N;
 
-    for (m = 0; m < M; m++) {
-        for (n = 0; n < n_iter; n++) {
-            int8_t a1 = *pSrcA++;
-            int8_t a2 = *pSrcA++;
-            int8_t b1 = *pSrcB++;
-            int8_t b2 = *pSrcB++;
-            *pDst++ = a1 + b1;
-            *pDst++ = a2 + b2;
+    if (n_rem) {
+        for (m = 0; m < M; m++) {
+            for (n = 0; n < n_iter; n++) {
+                int8_t a1 = *pSrcA++;
+                int8_t a2 = *pSrcA++;
+                int8_t b1 = *pSrcB++;
+                int8_t b2 = *pSrcB++;
+                asm volatile("" ::: "memory");
+                *pDst++ = a1 + b1;
+                *pDst++ = a2 + b2;
+            }
+            *pDst++ = *pSrcA++ + *pSrcB++;
+            pSrcA += step_a;
+            pSrcB += step_b;
+            pDst += step_y;
         }
-        if (n_rem) {
+    } else {
+        for (m = 0; m < M; m++) {
+            for (n = 0; n < n_iter; n++) {
+                int8_t a1 = *pSrcA++;
+                int8_t a2 = *pSrcA++;
+                int8_t b1 = *pSrcB++;
+                int8_t b2 = *pSrcB++;
+                asm volatile("" ::: "memory");
+                *pDst++ = a1 + b1;
+                *pDst++ = a2 + b2;
+            }
+            pSrcA += step_a;
+            pSrcB += step_b;
+            pDst += step_y;
+        }
+    }
+
+#else // PLP_MATH_LOOPUNROLL
+
+    uint32_t m, n; // loop counters
+
+    unsigned int step_a = strideA - N;
+    unsigned int step_b = strideB - N;
+    unsigned int step_y = strideY - N;
+
+    for (m = 0; m < M; m++) {
+        for (n = 0; n < N; n++) {
             *pDst++ = *pSrcA++ + *pSrcB++;
         }
         pSrcA += step_a;
@@ -101,7 +134,6 @@ void plp_mat_add_stride_i8s_rv32im(const int8_t *__restrict__ pSrcA,
     }
 
 #endif
-    //#undef BASIC_VERSION
 }
 
 /**

@@ -43,6 +43,14 @@
 
       `pDst[m, n] = pSrcA[m, n] + pSrcB[m, n]`
 
+  For strided operations, the implementation is an optimized version of the following code:
+
+      for (int m = 0; m < M; m++) {
+          for (int n = 0; n < N; n++) {
+              pDst[m * strideY + n] = pSrcA[m * strideA + n] + pSrcB[m * strideB + n];
+          }
+      }
+
   There are functions for integer 32- 16- and 8-bit data types, as well as for floating-point. These
   functions can also be used for fix-point matrices, if they have their fix-point at the same
   location. The outpt matrix will then also have the fix-point at the same location.
@@ -91,18 +99,7 @@ void plp_mat_add_stride_i16s_rv32im(const int16_t *__restrict__ pSrcA,
                                     uint32_t strideY,
                                     int16_t *__restrict__ pDst) {
 
-//#define BASIC_VERSION // if used don' forget to also use undefine at end of file
-#ifdef BASIC_VERSION
-
-    uint32_t m, n; // loop counters
-
-    for (m = 0; m < M; m++) {
-        for (n = 0; n < N; n++) {
-            pDst[m * strideY + n] = pSrcA[m * strideA + n] + pSrcB[m * strideB + n];
-        }
-    }
-
-#else
+#ifdef PLP_MATH_LOOPUNROLL
 
     uint32_t m, n; // loop counters
 
@@ -113,17 +110,52 @@ void plp_mat_add_stride_i16s_rv32im(const int16_t *__restrict__ pSrcA,
     unsigned int step_b = strideB - N;
     unsigned int step_y = strideY - N;
 
-    for (m = 0; m < M; m++) {
-        for (n = 0; n < n_iter; n++) {
-            int16_t a1 = *pSrcA++;
-            int16_t a2 = *pSrcA++;
-            int16_t b1 = *pSrcB++;
-            int16_t b2 = *pSrcB++;
-            *pDst++ = a1 + b1;
-            *pDst++ = a2 + b2;
-        }
-        if (n_rem) {
+    if (n_rem) {
+        for (m = 0; m < M; m++) {
+            for (n = 0; n < n_iter; n++) {
+                int16_t a1 = *pSrcA++;
+                int16_t a2 = *pSrcA++;
+                int16_t b1 = *pSrcB++;
+                int16_t b2 = *pSrcB++;
+                *pDst++ = a1 + b1;
+                *pDst++ = a2 + b2;
+            }
             *pDst++ = *pSrcA++ + *pSrcB++;
+            // go to next line
+            pSrcA += step_a;
+            pSrcB += step_b;
+            pDst += step_y;
+        }
+    } else {
+        for (m = 0; m < M; m++) {
+            for (n = 0; n < n_iter; n++) {
+                int16_t a1 = *pSrcA++;
+                int16_t a2 = *pSrcA++;
+                int16_t b1 = *pSrcB++;
+                int16_t b2 = *pSrcB++;
+                *pDst++ = a1 + b1;
+                *pDst++ = a2 + b2;
+            }
+            // go to next line
+            pSrcA += step_a;
+            pSrcB += step_b;
+            pDst += step_y;
+        }
+    }
+
+#else // PLP_MATH_LOOPUNROLL
+
+    uint32_t m, n; // loop counters
+
+    unsigned int step_a = strideA - N;
+    unsigned int step_b = strideB - N;
+    unsigned int step_y = strideY - N;
+
+    for (m = 0; m < M; m++) {
+        for (n = 0; n < N; n++) {
+            int16_t a = *pSrcA++;
+            int16_t b = *pSrcB++;
+            *pDst++ = a + b;
         }
         pSrcA += step_a;
         pSrcB += step_b;
@@ -131,7 +163,6 @@ void plp_mat_add_stride_i16s_rv32im(const int16_t *__restrict__ pSrcA,
     }
 
 #endif
-    //#undef BASIC_VERSION
 }
 
 /**

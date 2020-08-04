@@ -61,18 +61,7 @@ void plp_mat_add_stride_i32s_xpulpv2(const int32_t *__restrict__ pSrcA,
                                      uint32_t strideY,
                                      int32_t *__restrict__ pDst) {
 
-//#define BASIC_VERSION // if used don't forget to also use the undefine at end of file
-#ifdef BASIC_VERSION
-
-    uint32_t m, n; // loop counters
-
-    for (m = 0; m < M; m++) {
-        for (n = 0; n < N; n++) {
-            pDst[m * strideY + n] = pSrcA[m * strideA + n] + pSrcB[m * strideB + n];
-        }
-    }
-
-#else
+#ifdef PLP_MATH_LOOPUNROLL
 
     uint32_t m, n; // loop counters
 
@@ -83,17 +72,51 @@ void plp_mat_add_stride_i32s_xpulpv2(const int32_t *__restrict__ pSrcA,
     unsigned int step_b = strideB - N;
     unsigned int step_y = strideY - N;
 
-    for (m = 0; m < M; m++) {
-        for (n = 0; n < n_iter; n++) {
-            int32_t a1 = *pSrcA++;
-            int32_t a2 = *pSrcA++;
-            int32_t b1 = *pSrcB++;
-            int32_t b2 = *pSrcB++;
-            *pDst++ = a1 + b1;
-            *pDst++ = a2 + b2;
-        }
-        if (n_rem) {
+    if (n_rem) {
+        for (m = 0; m < M; m++) {
+            for (n = 0; n < n_iter; n++) {
+                int32_t a1 = *pSrcA++;
+                int32_t a2 = *pSrcA++;
+                int32_t b1 = *pSrcB++;
+                int32_t b2 = *pSrcB++;
+                *pDst++ = a1 + b1;
+                *pDst++ = a2 + b2;
+            }
             *pDst++ = *pSrcA++ + *pSrcB++;
+
+            pSrcA += step_a;
+            pSrcB += step_b;
+            pDst += step_y;
+        }
+    } else {
+        for (m = 0; m < M; m++) {
+            for (n = 0; n < n_iter; n++) {
+                int32_t a1 = *pSrcA++;
+                int32_t a2 = *pSrcA++;
+                int32_t b1 = *pSrcB++;
+                int32_t b2 = *pSrcB++;
+                *pDst++ = a1 + b1;
+                *pDst++ = a2 + b2;
+            }
+            pSrcA += step_a;
+            pSrcB += step_b;
+            pDst += step_y;
+        }
+    }
+
+#else // PLP_MATH_LOOPUNROLL
+
+    uint32_t m, n; // loop counters
+
+    unsigned int step_a = strideA - N;
+    unsigned int step_b = strideB - N;
+    unsigned int step_y = strideY - N;
+
+    for (m = 0; m < M; m++) {
+        for (n = 0; n < N; n++) {
+            int32_t a = *pSrcA++;
+            int32_t b = *pSrcB++;
+            *pDst++ = a + b;
         }
         pSrcA += step_a;
         pSrcB += step_b;
@@ -101,7 +124,6 @@ void plp_mat_add_stride_i32s_xpulpv2(const int32_t *__restrict__ pSrcA,
     }
 
 #endif
-    //#undef BASIC_VERSION
 }
 
 /**
