@@ -101,6 +101,12 @@ void plp_mat_add_stride_i16s_rv32im(const int16_t *__restrict__ pSrcA,
 
 #ifdef PLP_MATH_LOOPUNROLL
 
+    /*
+     * The problem with strided matrix operations is that a row will not always start at a memory
+     * aligned address. Therefore, loads might require multiple cycles, which causes load stalls
+     * even though we apply loop unrolling. TODO: Fix this behavior.
+     */
+
     uint32_t m, n; // loop counters
 
     unsigned int n_iter = N >> 1;

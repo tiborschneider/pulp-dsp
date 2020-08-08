@@ -72,21 +72,35 @@ void plp_mat_add_stride_i32s_rv32im(const int32_t *__restrict__ pSrcA,
     unsigned int step_b = strideB - N;
     unsigned int step_y = strideY - N;
 
-    for (m = 0; m < M; m++) {
-        for (n = 0; n < n_iter; n++) {
-            int32_t a1 = *pSrcA++;
-            int32_t a2 = *pSrcA++;
-            int32_t b1 = *pSrcB++;
-            int32_t b2 = *pSrcB++;
-            *pDst++ = a1 + b1;
-            *pDst++ = a2 + b2;
-        }
-        if (n_rem) {
+    if (n_rem) {
+        for (m = 0; m < M; m++) {
+            for (n = 0; n < n_iter; n++) {
+                int32_t a1 = *pSrcA++;
+                int32_t a2 = *pSrcA++;
+                int32_t b1 = *pSrcB++;
+                int32_t b2 = *pSrcB++;
+                *pDst++ = a1 + b1;
+                *pDst++ = a2 + b2;
+            }
             *pDst++ = *pSrcA++ + *pSrcB++;
+            pSrcA += step_a;
+            pSrcB += step_b;
+            pDst += step_y;
         }
-        pSrcA += step_a;
-        pSrcB += step_b;
-        pDst += step_y;
+    } else {
+        for (m = 0; m < M; m++) {
+            for (n = 0; n < n_iter; n++) {
+                int32_t a1 = *pSrcA++;
+                int32_t a2 = *pSrcA++;
+                int32_t b1 = *pSrcB++;
+                int32_t b2 = *pSrcB++;
+                *pDst++ = a1 + b1;
+                *pDst++ = a2 + b2;
+            }
+            pSrcA += step_a;
+            pSrcB += step_b;
+            pDst += step_y;
+        }
     }
 
 #else // PLP_MATH_LOOPUNROLL

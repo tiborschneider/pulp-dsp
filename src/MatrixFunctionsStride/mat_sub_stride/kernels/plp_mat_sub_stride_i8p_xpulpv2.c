@@ -66,23 +66,11 @@ void plp_mat_sub_stride_i8p_xpulpv2(void *args) {
     uint32_t nPE = a->nPE;
     int8_t *__restrict__ pDst = a->pDst;
 
-#define BASIC_VERSION // if used don't forget to also use the undefine at end of file
-#ifdef BASIC_VERSION
-
     uint32_t m, n; // loop counters
 
-    for (m = core_id; m < M; m += nPE) {
-        for (n = 0; n < N; n++) {
-            pDst[m * strideY + n] = pSrcA[m * strideA + n] - pSrcB[m * strideB + n];
-        }
-    }
-
-#else
-
-    uint32_t m, n; // loop counters
-
-    unsigned int n_iter = N >> 2;
-    unsigned int n_rem = N & 0x3;
+    unsigned int n_iter = N >> 3;
+    unsigned int n_rem = N & 0b011; // how many 1-byte additions to do
+    unsigned int n_blk = N & 0b100; // how many not-unrolled SIMD additions to do?
 
     pSrcA += strideA * core_id;
     pSrcB += strideB * core_id;
@@ -92,25 +80,122 @@ void plp_mat_sub_stride_i8p_xpulpv2(void *args) {
     unsigned int step_b = strideB * nPE - N;
     unsigned int step_y = strideY * nPE - N;
 
-    for (m = core_id; m < M; m += nPE) {
-        for (n = 0; n < n_iter; n++) {
-            v4s a = *((v4s *)pSrcA);
-            v4s b = *((v4s *)pSrcB);
-            *((v4s *)pDst) = __SUB4(a, b);
-            pSrcA += 4;
-            pSrcB += 4;
-            pDst += 4;
+    if (n_rem) {
+        if (n_blk) {
+            // n_rem >= 1
+            // n_blk == 1
+            for (m = core_id; m < M; m += nPE) {
+                for (n = 0; n < n_iter; n++) {
+                    v4s a1 = *((v4s *)pSrcA);
+                    v4s b1 = *((v4s *)pSrcB);
+                    pSrcA += 4;
+                    pSrcB += 4;
+                    v4s a2 = *((v4s *)pSrcA);
+                    v4s b2 = *((v4s *)pSrcB);
+                    pSrcA += 4;
+                    pSrcB += 4;
+                    *((v4s *)pDst) = __SUB4(a1, b1);
+                    pDst += 4;
+                    *((v4s *)pDst) = __SUB4(a2, b2);
+                    pDst += 4;
+                }
+                // n_blk == 1
+                v4s a = *((v4s *)pSrcA);
+                v4s b = *((v4s *)pSrcB);
+                pSrcA += 4;
+                pSrcB += 4;
+                *((v4s *)pDst) = __SUB4(a, b);
+                pDst += 4;
+                // n_rem >= 1
+                for (n = 0; n < n_rem; n++) {
+                    *pDst++ = *pSrcA++ - *pSrcB++;
+                }
+                pSrcA += step_a;
+                pSrcB += step_b;
+                pDst += step_y;
+            }
+        } else {
+            // n_rem >= 1
+            // n_blk == 0
+            for (m = core_id; m < M; m += nPE) {
+                for (n = 0; n < n_iter; n++) {
+                    v4s a1 = *((v4s *)pSrcA);
+                    v4s b1 = *((v4s *)pSrcB);
+                    pSrcA += 4;
+                    pSrcB += 4;
+                    v4s a2 = *((v4s *)pSrcA);
+                    v4s b2 = *((v4s *)pSrcB);
+                    pSrcA += 4;
+                    pSrcB += 4;
+                    *((v4s *)pDst) = __SUB4(a1, b1);
+                    pDst += 4;
+                    *((v4s *)pDst) = __SUB4(a2, b2);
+                    pDst += 4;
+                }
+                // n_rem >= 1
+                for (n = 0; n < n_rem; n++) {
+                    *pDst++ = *pSrcA++ - *pSrcB++;
+                }
+                pSrcA += step_a;
+                pSrcB += step_b;
+                pDst += step_y;
+            }
         }
-        for (n = 0; n < n_rem; n++) {
-            *pDst++ = *pSrcA++ - *pSrcB++;
-        }
-        pSrcA += step_a;
-        pSrcB += step_b;
-        pDst += step_y;
-    }
+    } else {
+        if (n_blk) {
+            // n_rem == 0
+            // n_blk == 1
+            for (m = core_id; m < M; m += nPE) {
+                for (n = 0; n < n_iter; n++) {
+                    v4s a1 = *((v4s *)pSrcA);
+                    v4s b1 = *((v4s *)pSrcB);
+                    pSrcA += 4;
+                    pSrcB += 4;
+                    v4s a2 = *((v4s *)pSrcA);
+                    v4s b2 = *((v4s *)pSrcB);
+                    pSrcA += 4;
+                    pSrcB += 4;
+                    *((v4s *)pDst) = __SUB4(a1, b1);
+                    pDst += 4;
+                    *((v4s *)pDst) = __SUB4(a2, b2);
+                    pDst += 4;
+                }
+                // n_blk == 1
+                v4s a = *((v4s *)pSrcA);
+                v4s b = *((v4s *)pSrcB);
+                pSrcA += 4;
+                pSrcB += 4;
+                *((v4s *)pDst) = __SUB4(a, b);
+                pDst += 4;
 
-#endif
-#undef BASIC_VERSION
+                pSrcA += step_a;
+                pSrcB += step_b;
+                pDst += step_y;
+            }
+        } else {
+            // n_rem == 0
+            // n_blk == 0
+            for (m = core_id; m < M; m += nPE) {
+                for (n = 0; n < n_iter; n++) {
+                    v4s a1 = *((v4s *)pSrcA);
+                    v4s b1 = *((v4s *)pSrcB);
+                    pSrcA += 4;
+                    pSrcB += 4;
+                    v4s a2 = *((v4s *)pSrcA);
+                    v4s b2 = *((v4s *)pSrcB);
+                    pSrcA += 4;
+                    pSrcB += 4;
+                    *((v4s *)pDst) = __SUB4(a1, b1);
+                    pDst += 4;
+                    *((v4s *)pDst) = __SUB4(a2, b2);
+                    pDst += 4;
+                }
+                pSrcA += step_a;
+                pSrcB += step_b;
+                pDst += step_y;
+            }
+        }
+    }
 }
 
 /**

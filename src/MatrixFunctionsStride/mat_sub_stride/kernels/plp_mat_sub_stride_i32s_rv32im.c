@@ -61,18 +61,7 @@ void plp_mat_sub_stride_i32s_rv32im(const int32_t *__restrict__ pSrcA,
                                     uint32_t strideY,
                                     int32_t *__restrict__ pDst) {
 
-//#define BASIC_VERSION // if used don' forget to also use undefine at end of file
-#ifdef BASIC_VERSION
-
-    uint32_t m, n; // loop counters
-
-    for (m = 0; m < M; m++) {
-        for (n = 0; n < N; n++) {
-            pDst[m * strideY + n] = pSrcA[m * strideA + n] - pSrcB[m * strideB + n];
-        }
-    }
-
-#else
+#ifdef PLP_MATH_LOOPUNROLL
 
     uint32_t m, n; // loop counters
 
@@ -100,8 +89,26 @@ void plp_mat_sub_stride_i32s_rv32im(const int32_t *__restrict__ pSrcA,
         pDst += step_y;
     }
 
+#else // PLP_MATH_LOOPUNROLL
+
+    uint32_t m, n; // loop counters
+
+    unsigned int step_a = strideA - N;
+    unsigned int step_b = strideB - N;
+    unsigned int step_y = strideY - N;
+
+    for (m = 0; m < M; m++) {
+        for (n = 0; n < N; n++) {
+            int32_t a = *pSrcA++;
+            int32_t b = *pSrcB++;
+            *pDst++ = a - b;
+        }
+        pSrcA += step_a;
+        pSrcB += step_b;
+        pDst += step_y;
+    }
+
 #endif
-    //#undef BASIC_VERSION
 }
 
 /**

@@ -83,7 +83,6 @@ void plp_mat_add_stride_i32s_xpulpv2(const int32_t *__restrict__ pSrcA,
                 *pDst++ = a2 + b2;
             }
             *pDst++ = *pSrcA++ + *pSrcB++;
-
             pSrcA += step_a;
             pSrcB += step_b;
             pDst += step_y;

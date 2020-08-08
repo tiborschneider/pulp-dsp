@@ -64,14 +64,9 @@ void plp_mat_add_stride_i8s_rv32im(const int8_t *__restrict__ pSrcA,
 #ifdef PLP_MATH_LOOPUNROLL
 
     /*
-     * Even though this implementation obviously unrolls the loops, load stalls still seem to occur.
-     * In fact, for a 32x32 matrix addition, we have 2055 load stalls, even though there are just a
-     * total of 2048 loads. This obviously does not make sense... When doing load stalls, we could
-     * remove a total of 4 load stalls, but this is very insignificant. This does not change with
-     * the introduction of the memory fence `asm volatile ("" ::: "memory")`. Also, checking the
-     * disassembly, the compiler seems to do everything correctly.
-     *
-     * TODO fix this behvior
+     * The problem with strided matrix operations is that a row will not always start at a memory
+     * aligned address. Therefore, loads might require multiple cycles, which causes load stalls
+     * even though we apply loop unrolling.
      */
 
     uint32_t m, n; // loop counters
